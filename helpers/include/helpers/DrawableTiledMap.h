@@ -22,8 +22,7 @@ public:
 
 private:
 
-    virtual void draw(sf::RenderTarget& target, sf::RenderStates states) const
-    {
+    virtual void draw(sf::RenderTarget& target, sf::RenderStates states) const {
         // Apply the entity's transform -- combine it with what was passed by the caller
         states.transform *= getTransform();
 

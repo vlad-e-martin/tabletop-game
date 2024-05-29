@@ -1,6 +1,6 @@
 #include <gui/AnimatedCharacter.h>
 
-sf::View GUI::AnimatedCharacter::getView() {
+sf::View GUI::AnimatedCharacter::getView() const {
     return m_charView;  
 }
 

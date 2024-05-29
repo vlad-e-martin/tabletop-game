@@ -4,6 +4,7 @@
 #include <gui/AnimatedCharacter.h>
 #include <gui/AnimatedSpell.h>
 #include <gui/MapLayer.h>
+#include <gui/UiLayer.h>
 
 #include <algorithm>
 #include <map>
@@ -59,8 +60,12 @@ namespace GUI {
     uint32_t constexpr kFrameRateLimit { 144u };
 
     // Game design parameters
-    std::string kFontPath { "C:\\Users\\vladi\\Documents\\Code\\C++\\tabletop-game\\gui\\assets\\fonts\\knight-vision-font\\KnightVision-p7Ezy.ttf" };
-    uint32_t kFontSize { 50u };
+    const std::string kFontPath { "C:\\Users\\vladi\\Documents\\Code\\C++\\tabletop-game\\gui\\assets\\fonts\\knight-vision-font\\KnightVision-p7Ezy.ttf" };
+    uint32_t constexpr kFontSize { 50u };
+
+    // UI parameters
+    const std::string kActionIconFilePath { "C:\\Users\\vladi\\Documents\\Code\\C++\\tabletop-game\\gui\\assets\\ui\\fantasy-ui-borders\\PNG\\Default\\Border\\panel-border-013.png" };
+    uint16_t constexpr kNumActionIcons { 4u };
 
     // Map parameters
     const sf::Vector2f kPixelOffset(100, 200); // Offset of the map from top-left corner of the window; Pixels
@@ -69,7 +74,7 @@ namespace GUI {
     class GameEnvironment {
     public:
         GameEnvironment() : m_gameWindow(sf::RenderWindow( {kWindowWidth, kWindowHeight}, "Tabletop Simulator", sf::Style::Default)),
-                            m_mapLayer(kCellSize, kPixelOffset) {
+                            m_mapLayer(kCellSize, kPixelOffset), m_uiLayer(kActionIconFilePath) {
             m_gameWindow.setFramerateLimit(kFrameRateLimit);
 
             if (!m_font.loadFromFile(kFontPath)) {
@@ -84,6 +89,8 @@ namespace GUI {
             }
 
             m_mapBoundingBox = m_mapLayer.getMapRect();
+
+            
         }
 
         sf::Vector2f convertCellToPixelPosition(const uint16_t& cellX, const uint16_t& cellY, 
@@ -172,13 +179,20 @@ namespace GUI {
                     m_gameWindow.close();
                 }
                 if (event.type == sf::Event::MouseButtonReleased) {
+                    const auto clickPosition_pixels = m_gameWindow.mapPixelToCoords(sf::Mouse::getPosition(m_gameWindow));
+
+                    // TODO: Enable spell casting routine via action bar click (then let user select target among NPCs, maybe show range via highlights)
+                    int16_t actionIndClicked = m_uiLayer.getIndOfActionIconClicked(clickPosition_pixels);
+                    if (actionIndClicked >= 0) {
+                        std::cout << "INFO: GameEnvironment::processUserInput(): " << 
+                                    "Detected click on action icon #" << actionIndClicked << "!" << std::endl;
+                    }
                     // Avoid spell casting until current spell has reached its target
                     if (m_spellPtr == nullptr) {
                         m_spellPtr = std::make_unique<GUI::AnimatedSpell>(kSpellSpriteSheetFilePathMap.at(SpellType::Fireball), 
                                     kCellSize);
                         // Spell starts from the character who casted it
                         // Spell will end in the center of the cell containing the mouse click
-                        const auto clickPosition_pixels = m_gameWindow.mapPixelToCoords(sf::Mouse::getPosition(m_gameWindow));
                         const auto targetX_cells = std::floor((clickPosition_pixels.x - m_mapBoundingBox.left) / kCellSize.x);
                         const auto targetY_cells = std::floor((clickPosition_pixels.y - m_mapBoundingBox.top) / kCellSize.y);
                         const sf::Vector2f targetPosition((targetX_cells + 0.5) * kCellSize.x + m_mapBoundingBox.left, 
@@ -237,6 +251,15 @@ namespace GUI {
                     m_spellStepCount = 0;
                 }
             }
+            
+            // Shift UI overlay to always be below the character
+            m_gameWindow.setView(m_uiLayer.getView());
+
+            // Draw the UI overlay
+            m_gameWindow.draw(m_uiLayer);
+
+            // Shift back to character-centric view
+            m_gameWindow.setView(m_characterPtr->getView());
 
             // Display the new content on the window
             m_gameWindow.display();
@@ -255,6 +278,10 @@ namespace GUI {
             initializeCharPlacement(0u, 0u);
             // Place the NPCs
             initializeNpcPlacement();
+
+            // Initialize UI
+            m_uiLayer.setView(m_characterPtr->createView());
+            m_uiLayer.initializeUiOverlay(kNumActionIcons);
 
             while (m_gameWindow.isOpen()) {
                 processTurn();
@@ -276,6 +303,7 @@ namespace GUI {
         // Game map
         MapLayer m_mapLayer;
         sf::FloatRect m_mapBoundingBox;
+        UiLayer m_uiLayer;
 
         // In-game header text
         sf::Font m_font;

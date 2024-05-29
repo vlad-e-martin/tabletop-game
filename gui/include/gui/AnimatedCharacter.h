@@ -40,7 +40,7 @@ public:
                             AnimatedSprite(spriteSheetFilePath, kCharacterTextureRect, cellSize, moveCycleSize), 
                             m_mapBoundingBox(mapBoundingBox) {}
 
-    sf::View getView();
+    sf::View getView() const;
     sf::View createView();
 
     void processMoveOneDirection(const uint32_t& spriteMoveRow,
