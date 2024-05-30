@@ -61,11 +61,11 @@ namespace GUI {
 
     // Game design parameters
     const std::string kFontPath { "C:\\Users\\vladi\\Documents\\Code\\C++\\tabletop-game\\gui\\assets\\fonts\\knight-vision-font\\KnightVision-p7Ezy.ttf" };
-    uint32_t constexpr kFontSize { 50u };
 
     // UI parameters
     const std::string kActionIconFilePath { "C:\\Users\\vladi\\Documents\\Code\\C++\\tabletop-game\\gui\\assets\\ui\\fantasy-ui-borders\\PNG\\Default\\Border\\panel-border-013.png" };
     uint16_t constexpr kNumActionIcons { 4u };
+    const std::string kMessageDividerFilePath { "C:\\Users\\vladi\\Documents\\Code\\C++\\tabletop-game\\gui\\assets\\ui\\fantasy-ui-borders\\PNG\\Default\\Divider\\divider-004.png" };
 
     // Map parameters
     const sf::Vector2f kPixelOffset(100, 200); // Offset of the map from top-left corner of the window; Pixels
@@ -74,14 +74,8 @@ namespace GUI {
     class GameEnvironment {
     public:
         GameEnvironment() : m_gameWindow(sf::RenderWindow( {kWindowWidth, kWindowHeight}, "Tabletop Simulator", sf::Style::Default)),
-                            m_mapLayer(kCellSize, kPixelOffset), m_uiLayer(kActionIconFilePath) {
+                            m_mapLayer(kCellSize, kPixelOffset), m_uiLayer(kActionIconFilePath, kMessageDividerFilePath, kFontPath) {
             m_gameWindow.setFramerateLimit(kFrameRateLimit);
-
-            if (!m_font.loadFromFile(kFontPath)) {
-                throw std::runtime_error("ERROR: GameEnvironment::GameEnvironment(): Failed to load game's font file!");
-            }
-            m_headerText = sf::Text("Tabletop Simulator", m_font, kFontSize);
-            m_headerText.setStyle(sf::Text::Bold | sf::Text::Underlined);
 
             // Use the premade map for testing purposes
             if (!m_mapLayer.loadMap(kCsvMapFilePath)) {
@@ -170,50 +164,82 @@ namespace GUI {
             return uniqueCellPositionList;
         }
 
+        void processGameInteraction(sf::Event& event) {
+            // Close window: exit
+            if (event.type == sf::Event::Closed) {
+                m_gameWindow.close();
+            }
+            if (event.type == sf::Event::MouseButtonReleased) {
+                const auto clickPositionUi = m_gameWindow.mapPixelToCoords(sf::Mouse::getPosition(m_gameWindow), m_uiLayer.getView());
+                int16_t actionIndClicked = m_uiLayer.getIndOfActionIconClicked(clickPositionUi);
+                if (actionIndClicked >= 0) {
+                    std::cout << "User clicked on action icon!" << std::endl;
+                    m_uiLayer.createActionMessage("Select a target");
+                    m_isAwaitingAction = true;
+                }
+                else if (m_spellPtr == nullptr) { // Avoid spell casting until current spell has reached its target
+                    const auto clickPositionGame = m_gameWindow.mapPixelToCoords(sf::Mouse::getPosition(m_gameWindow), m_characterPtr->getView());
+                    std::cout << "Casting a spell at the target!" << std::endl;
+                    m_spellPtr = std::make_unique<GUI::AnimatedSpell>(kSpellSpriteSheetFilePathMap.at(SpellType::Fireball), 
+                                kCellSize);
+                    // Spell starts from the character who casted it
+                    // Spell will end in the center of the cell containing the mouse click
+                    const auto targetX_cells = std::floor((clickPositionGame.x - m_mapBoundingBox.left) / kCellSize.x);
+                    const auto targetY_cells = std::floor((clickPositionGame.y - m_mapBoundingBox.top) / kCellSize.y);
+                    const sf::Vector2f targetPosition((targetX_cells + 0.5) * kCellSize.x + m_mapBoundingBox.left, 
+                                (targetY_cells + 0.5) * kCellSize.y + m_mapBoundingBox.top);
+                    // Initialize the casting process, setting the spell's velocity (direction & speed)
+                    m_spellPtr->startSpellCasting(m_characterPtr->getSpritePosition(), targetPosition);
+                }
+            }
+
+            if (event.type == sf::Event::KeyPressed) {
+                // Movement keys: 
+                // W, Up = Up
+                // A, Left = Left
+                // S, Down = Down
+                // D, Right = Right
+                if (!m_characterPtr->processKeyPressToMove(event) && 
+                            event.key.code == sf::Keyboard::Key::Escape) {
+                    m_gameWindow.close();
+                }
+            }
+        }
+
         void processUserInput() {
             sf::Event event;
             // Process newly-detected events
             while (m_gameWindow.pollEvent(event)) {
-                // Close window: exit
-                if (event.type == sf::Event::Closed) {
-                    m_gameWindow.close();
-                }
-                if (event.type == sf::Event::MouseButtonReleased) {
-                    const auto clickPosition_pixels = m_gameWindow.mapPixelToCoords(sf::Mouse::getPosition(m_gameWindow));
-
-                    // TODO: Enable spell casting routine via action bar click (then let user select target among NPCs, maybe show range via highlights)
-                    int16_t actionIndClicked = m_uiLayer.getIndOfActionIconClicked(clickPosition_pixels);
-                    if (actionIndClicked >= 0) {
-                        std::cout << "INFO: GameEnvironment::processUserInput(): " << 
-                                    "Detected click on action icon #" << actionIndClicked << "!" << std::endl;
-                    }
-                    // Avoid spell casting until current spell has reached its target
-                    if (m_spellPtr == nullptr) {
-                        m_spellPtr = std::make_unique<GUI::AnimatedSpell>(kSpellSpriteSheetFilePathMap.at(SpellType::Fireball), 
-                                    kCellSize);
-                        // Spell starts from the character who casted it
-                        // Spell will end in the center of the cell containing the mouse click
-                        const auto targetX_cells = std::floor((clickPosition_pixels.x - m_mapBoundingBox.left) / kCellSize.x);
-                        const auto targetY_cells = std::floor((clickPosition_pixels.y - m_mapBoundingBox.top) / kCellSize.y);
-                        const sf::Vector2f targetPosition((targetX_cells + 0.5) * kCellSize.x + m_mapBoundingBox.left, 
-                                    (targetY_cells + 0.5) * kCellSize.y + m_mapBoundingBox.top);
-                        // Initialize the casting process, setting the spell's velocity (direction & speed)
-                        m_spellPtr->startSpellCasting(m_characterPtr->getSpritePosition(), targetPosition);
+                // Pause all other interaction until the user selects a target to act on
+                if (m_isAwaitingAction) {
+                    if (event.type == sf::Event::MouseButtonReleased) {
+                        // We've selected a target, allow game to continue
+                        m_isAwaitingAction = false;
+                        // Execute the action on the selected target
+                        processGameInteraction(event);
                     }
                 }
-
-                if (event.type == sf::Event::KeyPressed) {
-                    // Movement keys: 
-                    // W, Up = Up
-                    // A, Left = Left
-                    // S, Down = Down
-                    // D, Right = Right
-                    if (!m_characterPtr->processKeyPressToMove(event) && 
-                                event.key.code == sf::Keyboard::Key::Escape) {
-                        m_gameWindow.close();
-                    }
+                else {
+                    // Process user's interaction with the game (when not paused)
+                    processGameInteraction(event);
                 }
             }
+        }
+
+        void renderUiOverlay() {
+            // Shift UI overlay to always be below the character
+            m_gameWindow.setView(m_uiLayer.getView());
+
+            // Draw the UI overlay
+            m_gameWindow.draw(m_uiLayer);
+
+            if (m_isAwaitingAction) {
+                // Keep message up prompting user to select a target for their action
+                m_uiLayer.drawActionMessage(m_gameWindow);
+            }
+
+            // Shift back to character-centric view
+            m_gameWindow.setView(m_characterPtr->getView());
         }
 
         void processTurn() {
@@ -223,8 +249,6 @@ namespace GUI {
             // Clear old content from window
             m_gameWindow.clear();
 
-            // Draw the in-game header text
-            m_gameWindow.draw(m_headerText);
             // Draw the base terrain map
             m_gameWindow.draw(m_mapLayer.getTiledMap());
 
@@ -251,15 +275,8 @@ namespace GUI {
                     m_spellStepCount = 0;
                 }
             }
-            
-            // Shift UI overlay to always be below the character
-            m_gameWindow.setView(m_uiLayer.getView());
-
-            // Draw the UI overlay
-            m_gameWindow.draw(m_uiLayer);
-
-            // Shift back to character-centric view
-            m_gameWindow.setView(m_characterPtr->getView());
+        
+            renderUiOverlay();
 
             // Display the new content on the window
             m_gameWindow.display();
@@ -298,16 +315,13 @@ namespace GUI {
         std::unique_ptr<AnimatedSpell> m_spellPtr = nullptr;
         
         // Movement trackers
+        bool m_isAwaitingAction = false;
         uint32_t m_spellStepCount;
 
         // Game map
         MapLayer m_mapLayer;
         sf::FloatRect m_mapBoundingBox;
         UiLayer m_uiLayer;
-
-        // In-game header text
-        sf::Font m_font;
-        sf::Text m_headerText;
     };
 }
 
