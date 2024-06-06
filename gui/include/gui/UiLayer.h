@@ -1,6 +1,8 @@
 #ifndef UI_LAYOUT_H
 #define UI_LAYOUT_H
 
+#include <gui/AnimatedSpell.h>
+
 #include <SFML/Graphics.hpp>
 
 #include <iostream>
@@ -8,7 +10,6 @@
 #include <vector>
 
 namespace GUI {
-
     uint32_t constexpr kMenuFontSize { 34u };
     uint32_t constexpr kMessageFontSize { 26u };
 
@@ -81,10 +82,10 @@ namespace GUI {
         }
 
         /// @brief Construct UI layer (currently only contains action bar)
-        /// @param numActionIcons Number of action icons to store in the bar
-        void initializeUiOverlay(const uint16_t& numActionIcons) {
-            m_numActionIcons = numActionIcons;
-            createActionBar();
+        /// @param numActionIcons Art to use to fill in action icons in the bar
+        void initializeUiOverlay(const std::vector<std::shared_ptr<AnimatedSpell>>& spellPtrList) {
+            m_numActionIcons = spellPtrList.size();
+            createActionBar(spellPtrList);
         }
 
         void createActionMessage(const std::string& actionMessage) {
@@ -116,7 +117,7 @@ namespace GUI {
 
     private:
         /// @brief Create the action bar and its translucent background
-        void createActionBar();
+        void createActionBar(const std::vector<std::shared_ptr<AnimatedSpell>>& spellPtrList);
 
         virtual void draw(sf::RenderTarget& target, sf::RenderStates states) const {
             // Apply the entity's transform -- combine it with what was passed by the caller
@@ -129,6 +130,10 @@ namespace GUI {
             target.draw(m_actionBarBackground);
             // Draw the action bar icons themselves
             target.draw(m_actionIcons, states);
+            // Draw the art for the action bar icons
+            for (const auto& actionIconArt : m_actionIconArtList) {
+                target.draw(actionIconArt);
+            }
         }
 
         sf::View m_uiOverlayView;
@@ -137,6 +142,7 @@ namespace GUI {
         sf::RectangleShape m_actionBarBackground;
         sf::Texture m_actionIconTexture;
         sf::VertexArray m_actionIcons;
+        std::vector<sf::RectangleShape> m_actionIconArtList;
         // On-screen message related to action
         sf::Texture m_messageDividerTexture;
         sf::RectangleShape m_actionMessageBackground;

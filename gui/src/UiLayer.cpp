@@ -1,6 +1,6 @@
 #include <gui/UiLayer.h>
 
-void GUI::UiLayer::createActionBar() {
+void GUI::UiLayer::createActionBar(const std::vector<std::shared_ptr<AnimatedSpell>>& spellPtrList) {
     const float numF = static_cast<float>(m_numActionIcons);
     const sf::Vector2f actionBarSize(numF * kActionIconMapSize.x + (numF - 1.0) * kActionIconBuffer, kActionIconMapSize.y);
     const sf::Vector2f uiCenterPosition = m_uiOverlayView.getCenter();
@@ -17,9 +17,22 @@ void GUI::UiLayer::createActionBar() {
     m_actionIcons.resize(m_numActionIcons * 4);
     float iconIndF, xBuffer, yBuffer;
     uint32_t vertexInd = 0u, textureInd = 0u;
+    m_actionIconArtList = {};
+    std::cout << "Creating " << m_numActionIcons << " action icons in the action bar!" << std::endl;
     for (uint16_t iconInd = 0; iconInd < m_numActionIcons; iconInd++) {
         iconIndF = static_cast<float>(iconInd);
         xBuffer = iconIndF * (kActionIconMapSize.x + kActionIconBuffer);
+
+        // Action icon art
+        std::cout << "Setting texture for action icon #" << iconInd << std::endl;
+        const sf::IntRect iconArtBox = spellPtrList[iconInd]->getActionIconArtTextureBox();
+        const sf::Vector2f iconArtBoxSize(iconArtBox.width, iconArtBox.height);
+        sf::RectangleShape currentActionIconArt(iconArtBoxSize);
+        currentActionIconArt.setTexture(&spellPtrList[iconInd]->getActionIconArt());
+        currentActionIconArt.setTextureRect(iconArtBox);
+        currentActionIconArt.setOrigin(0.5 * iconArtBox.width, 0.5 * iconArtBox.height);
+        currentActionIconArt.setPosition(xOffset + xBuffer + 0.5 * kActionIconMapSize.x, yOffset + 0.5 * kActionIconMapSize.y);
+        m_actionIconArtList.push_back(currentActionIconArt);
 
         // Map action bar
         m_actionIcons[vertexInd].position = sf::Vector2f(xOffset + xBuffer, yOffset);

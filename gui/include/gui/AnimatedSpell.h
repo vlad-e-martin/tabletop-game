@@ -3,6 +3,8 @@
 
 #include <gui/AnimatedSprite.h>
 
+#include <memory>
+
 namespace GUI {
 int constexpr kFireballSheetOffsetX { 0 };
 int constexpr kFireballSheetOffsetY { 0 };
@@ -38,6 +40,14 @@ public:
 
     void startSpellCasting(const sf::Vector2f& originPosition, const sf::Vector2f& targetPosition);
     bool processSpellMove();
+
+    const sf::Texture& getActionIconArt() const {
+        return m_spriteTexture;
+    }
+
+    sf::IntRect getActionIconArtTextureBox() const {
+        return m_spriteSheetElementBox;
+    }
 
 private:
     uint32_t m_numStepsToTarget;

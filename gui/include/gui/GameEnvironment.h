@@ -83,8 +83,6 @@ namespace GUI {
             }
 
             m_mapBoundingBox = m_mapLayer.getMapRect();
-
-            
         }
 
         sf::Vector2f convertCellToPixelPosition(const uint16_t& cellX, const uint16_t& cellY, 
@@ -173,15 +171,15 @@ namespace GUI {
                 const auto clickPositionUi = m_gameWindow.mapPixelToCoords(sf::Mouse::getPosition(m_gameWindow), m_uiLayer.getView());
                 int16_t actionIndClicked = m_uiLayer.getIndOfActionIconClicked(clickPositionUi);
                 if (actionIndClicked >= 0) {
-                    std::cout << "User clicked on action icon!" << std::endl;
+                    m_selectedSpellInd = actionIndClicked;
+                    std::cout << "User clicked on action icon #" << m_selectedSpellInd << std::endl;
                     m_uiLayer.createActionMessage("Select a target");
                     m_isAwaitingAction = true;
                 }
-                else if (m_spellPtr == nullptr) { // Avoid spell casting until current spell has reached its target
+                else if (m_selectedSpellInd >= 0) {
+                    // Initialize the spell
                     const auto clickPositionGame = m_gameWindow.mapPixelToCoords(sf::Mouse::getPosition(m_gameWindow), m_characterPtr->getView());
                     std::cout << "Casting a spell at the target!" << std::endl;
-                    m_spellPtr = std::make_unique<GUI::AnimatedSpell>(kSpellSpriteSheetFilePathMap.at(SpellType::Fireball), 
-                                kCellSize);
                     // Spell starts from the character who casted it
                     // Spell will end in the center of the cell containing the mouse click
                     const auto targetX_cells = std::floor((clickPositionGame.x - m_mapBoundingBox.left) / kCellSize.x);
@@ -189,10 +187,9 @@ namespace GUI {
                     const sf::Vector2f targetPosition((targetX_cells + 0.5) * kCellSize.x + m_mapBoundingBox.left, 
                                 (targetY_cells + 0.5) * kCellSize.y + m_mapBoundingBox.top);
                     // Initialize the casting process, setting the spell's velocity (direction & speed)
-                    m_spellPtr->startSpellCasting(m_characterPtr->getSpritePosition(), targetPosition);
+                    m_spellPtrList[m_selectedSpellInd]->startSpellCasting(m_characterPtr->getSpritePosition(), targetPosition);
                 }
             }
-
             if (event.type == sf::Event::KeyPressed) {
                 // Movement keys: 
                 // W, Up = Up
@@ -261,17 +258,20 @@ namespace GUI {
                 m_gameWindow.draw(npcPtr->getSprite());
             }
 
-            // Draw a spell if it is being cast
-            if (m_spellPtr != nullptr) {
-                if (m_spellStepCount < m_spellPtr->getNumStepsToTarget()) {
+            // Draw a spell if a target is being selected (meaning it has been cast)
+            if (!m_isAwaitingAction && m_selectedSpellInd >= 0) {
+                std::cout << "Selected spell index = " << m_selectedSpellInd << std::endl;
+                std::cout << "Current num steps to target = " << m_spellStepCount << std::endl;
+                std::cout << "Total num steps to target = " << m_spellPtrList[m_selectedSpellInd]->getNumStepsToTarget() << std::endl;
+                if (m_spellStepCount < m_spellPtrList[m_selectedSpellInd]->getNumStepsToTarget()) {
                     // Only increment when the spell moves
-                    if (m_spellPtr->processSpellMove()) {
+                    if (m_spellPtrList[m_selectedSpellInd]->processSpellMove()) {
                         m_spellStepCount++;
                     }
-                    m_gameWindow.draw(m_spellPtr->getSprite());
+                    m_gameWindow.draw(m_spellPtrList[m_selectedSpellInd]->getSprite());
                 } else {
                     // Reset spell casting trackers
-                    m_spellPtr.reset();
+                    m_selectedSpellInd = -1;
                     m_spellStepCount = 0;
                 }
             }
@@ -290,6 +290,12 @@ namespace GUI {
                 m_npcPtrList.push_back(std::make_unique<AnimatedSprite>(kNpcSpriteSheetFilePathMap.at(npcType),
                             kNpcSingleElementBoxMap.at(npcType), kCellSize, kNpcMoveCycleMap.at(npcType)));
             }
+            // Construct spell list
+            // TODO: Allow for unique spell types in the spell list
+            for (uint16_t spellInd = 0; spellInd < kNumActionIcons; spellInd++) {
+                m_spellPtrList.push_back(std::make_shared<AnimatedSpell>(kSpellSpriteSheetFilePathMap.at(SpellType::Fireball), 
+                            kCellSize));
+            }
             
             // Place the character of the 6th row, 11th column
             initializeCharPlacement(0u, 0u);
@@ -298,7 +304,10 @@ namespace GUI {
 
             // Initialize UI
             m_uiLayer.setView(m_characterPtr->createView());
-            m_uiLayer.initializeUiOverlay(kNumActionIcons);
+            std::cout << "Fetching spell icon art" << std::endl;
+            
+            std::cout << "Initializing the UI overlay" << std::endl;
+            m_uiLayer.initializeUiOverlay(m_spellPtrList);
 
             while (m_gameWindow.isOpen()) {
                 processTurn();
@@ -312,11 +321,12 @@ namespace GUI {
         // Sprites on the map
         std::unique_ptr<AnimatedCharacter> m_characterPtr;
         std::vector<std::unique_ptr<AnimatedSprite>> m_npcPtrList;
-        std::unique_ptr<AnimatedSpell> m_spellPtr = nullptr;
+        std::vector<std::shared_ptr<AnimatedSpell>> m_spellPtrList;
         
         // Movement trackers
         bool m_isAwaitingAction = false;
-        uint32_t m_spellStepCount;
+        int m_selectedSpellInd = -1;
+        uint32_t m_spellStepCount = 0;
 
         // Game map
         MapLayer m_mapLayer;
